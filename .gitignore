@@ -1,0 +1,18 @@
+# ==============================================================================
+# OmniPay Zero-Trust — .gitignore pour omnipay-gitops
+# ==============================================================================
+
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Secrets & clés privées
+*.pem
+*.key
+*.p12
+*.jks
+secrets/
+.env*
+!*.example
