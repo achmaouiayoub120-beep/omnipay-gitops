@@ -1,0 +1,71 @@
+# ==============================================================================
+# OmniPay Zero-Trust — Transaction Service (Recette)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-service
+  namespace: omnipay-recette
+  labels:
+    app: transaction-service
+    app.kubernetes.io/name: transaction-service
+    app.kubernetes.io/part-of: omnipay-zero-trust
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: transaction-service
+  template:
+    metadata:
+      labels:
+        app: transaction-service
+        app.kubernetes.io/name: transaction-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/port: "8081"
+    spec:
+      imagePullSecrets:
+        - name: harbor-registry-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      containers:
+        - name: transaction-service
+          image: harbor.omnipay.local:30002/omnipay/transaction-service:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: 8081
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "recette"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-service
+  namespace: omnipay-recette
+  labels:
+    app: transaction-service
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+    - name: metrics
+      port: 8081
+      targetPort: 8081
+  selector:
+    app: transaction-service

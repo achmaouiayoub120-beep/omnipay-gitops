@@ -1,0 +1,104 @@
+# ==============================================================================
+# OmniPay Zero-Trust — Harbor Helm Values (Production / K3s)
+# Chart: harbor/harbor (https://helm.goharbor.io)
+# Rôle P4 : Livraison & Chaîne d'Approvisionnement
+# ==============================================================================
+
+# Configuration de l'exposition du service Harbor
+expose:
+  type: nodePort
+  tls:
+    enabled: false
+  nodePort:
+    name: harbor
+    ports:
+      http:
+        port: 80
+        nodePort: 30002
+      https:
+        port: 443
+        nodePort: 30003
+      notary:
+        port: 4443
+        nodePort: 30004
+
+# URL externe accessible depuis les nœuds K3s, Jenkins et les développeurs
+externalURL: http://harbor.omnipay.local:30002
+
+# Secret administrateur initial (conforme Zero-Trust pour bootstrap)
+harborAdminPassword: "HarborAdminOmniPay2026!"
+
+# Scanner de vulnérabilités Trivy intégré
+trivy:
+  enabled: true
+  gitHubToken: ""
+  severity: "CRITICAL,HIGH,MEDIUM"
+  ignoreUnfixed: false
+  skipUpdate: false
+  offlineScan: false
+  insecure: true
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1536Mi
+
+# Scanner Notary désactivé (remplacé par Cosign dans l'architecture Zero-Trust moderne)
+notary:
+  enabled: false
+
+# Stockage et persistance (adapté pour environnement K3s local-path)
+persistence:
+  enabled: true
+  resourcePolicy: "keep"
+  persistentVolumeClaim:
+    registry:
+      size: 15Gi
+    chartmuseum:
+      size: 5Gi
+    jobservice:
+      jobLog:
+        size: 5Gi
+    database:
+      size: 5Gi
+    redis:
+      size: 2Gi
+    trivy:
+      size: 5Gi
+
+# Composant Core Harbor
+core:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 150m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Registre d'artefacts OCI
+registry:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Observabilité & Métriques Prometheus (scraped par Prometheus P5)
+metrics:
+  enabled: true
+  core:
+    path: /metrics
+    port: 8001
+  registry:
+    path: /metrics
+    port: 8001
+  jobservice:
+    path: /metrics
+    port: 8001

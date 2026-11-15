@@ -1,0 +1,31 @@
+# ==============================================================================
+# OmniPay Zero-Trust — Kyverno ClusterPolicy : Interdiction d'exécution en root
+# Rôle P4 : Livraison & Chaîne d'Approvisionnement
+# ==============================================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-run-as-non-root
+  annotations:
+    policies.kyverno.io/title: "Interdiction d'exécution en root"
+    policies.kyverno.io/category: "Pod Security Standards (Restricted)"
+    policies.kyverno.io/severity: "high"
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: check-run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - omnipay-prod
+                - omnipay-recette
+      validate:
+        message: "Les conteneurs dans omnipay-prod et omnipay-recette doivent s'exécuter en tant qu'utilisateur non-root (runAsNonRoot: true)."
+        pattern:
+          spec:
+            securityContext:
+              runAsNonRoot: true

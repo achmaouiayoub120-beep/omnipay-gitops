@@ -1,0 +1,13 @@
+# ==============================================================================
+# OmniPay Zero-Trust — Namespace Production (Zero-Trust Strict)
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: omnipay-prod
+  labels:
+    environment: prod
+    app.kubernetes.io/part-of: omnipay-zero-trust
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
