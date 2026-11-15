@@ -14,9 +14,10 @@ resources:
   - notification-service.yaml
   - network-policies.yaml
 
-commonLabels:
-  environment: dev
-  app.kubernetes.io/managed-by: argocd
+labels:
+  - pairs:
+      environment: dev
+      app.kubernetes.io/managed-by: argocd
 
 images:
   - name: harbor.omnipay.local:30002/omnipay/auth-service
