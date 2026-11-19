@@ -1,0 +1,10 @@
+# ==============================================================================
+# OmniPay Zero-Trust — Namespace Dev
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: omnipay-dev
+  labels:
+    environment: dev
+    app.kubernetes.io/part-of: omnipay-zero-trust

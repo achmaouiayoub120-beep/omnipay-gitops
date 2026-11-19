@@ -1,0 +1,89 @@
+# ==============================================================================
+# OmniPay Zero-Trust — ArgoCD Helm Values (Production / K3s)
+# Chart: argo/argo-cd (https://argoproj.github.io/argo-helm)
+# Rôle P4 : Livraison & Chaîne d'Approvisionnement
+# ==============================================================================
+
+global:
+  domain: argocd.omnipay.local
+
+# Configuration du serveur ArgoCD UI & API
+server:
+  extraArgs:
+    - --insecure
+  service:
+    type: NodePort
+    nodePortHttp: 30005
+    nodePortHttps: 30006
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false
+
+# Contrôleur d'applications ArgoCD
+controller:
+  metrics:
+    enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1024Mi
+
+# Repo Server pour le rendu des manifestes (Kustomize, Helm)
+repoServer:
+  metrics:
+    enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ApplicationSet Controller activé nativement
+applicationSet:
+  enabled: true
+  metrics:
+    enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi
+
+# Notifications controller
+notifications:
+  enabled: false
+
+# Redis interne pour le cache des manifestes
+redis:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# RBAC d'ArgoCD pour respecter le modèle Zero-Trust
+configs:
+  params:
+    server.insecure: true
+  cm:
+    url: http://argocd.omnipay.local:30005
+    admin.enabled: true
+    timeout.reconciliation: 60s
+  rbac:
+    policy.default: role:readonly
+    policy.csv: |
+      p, role:devsecops-admin, applications, *, */*, allow
+      p, role:devsecops-admin, clusters, get, *, allow
+      p, role:devsecops-admin, repositories, *, *, allow
+      g, admin, role:admin

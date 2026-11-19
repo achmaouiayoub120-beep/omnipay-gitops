@@ -1,0 +1,69 @@
+# ==============================================================================
+# OmniPay Zero-Trust — ApplicationSet Multi-Environnements (GitOps)
+# Génère automatiquement les applications ArgoCD pour dev, recette et prod
+# Dépôt source : https://github.com/achmaouiayoub120-beep/omnipay-gitops.git
+# Rôle P4 : Livraison & Chaîne d'Approvisionnement
+# ==============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: omnipay-environments
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: omnipay-applicationset
+    app.kubernetes.io/part-of: omnipay-zero-trust
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: omnipay-dev
+            cluster: https://kubernetes.default.svc
+            autoSyncPrune: true
+            autoSyncSelfHeal: true
+            description: "Environnement d'intégration continue et de développement rapide"
+          - env: recette
+            namespace: omnipay-recette
+            cluster: https://kubernetes.default.svc
+            autoSyncPrune: true
+            autoSyncSelfHeal: true
+            description: "Environnement de qualification, tests de charge k6 et scans DAST OWASP ZAP"
+          - env: prod
+            namespace: omnipay-prod
+            cluster: https://kubernetes.default.svc
+            autoSyncPrune: false
+            autoSyncSelfHeal: true
+            description: "Environnement de Production bancaire avec Canary Releases (Argo Rollouts)"
+  template:
+    metadata:
+      name: "omnipay-{{env}}"
+      namespace: argocd
+      labels:
+        environment: "{{env}}"
+        app.kubernetes.io/part-of: omnipay-zero-trust
+      annotations:
+        argocd.argoproj.io/sync-wave: "1"
+        description: "{{description}}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/achmaouiayoub120-beep/omnipay-gitops.git
+        targetRevision: main
+        path: "envs/{{env}}"
+      destination:
+        server: "{{cluster}}"
+        namespace: "{{namespace}}"
+      syncPolicy:
+        automated:
+          prune: "{{autoSyncPrune}}"
+          selfHeal: "{{autoSyncSelfHeal}}"
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+          - RespectIgnoreDifferences=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m

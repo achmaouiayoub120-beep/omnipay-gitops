@@ -1,0 +1,28 @@
+# ==============================================================================
+# OmniPay Zero-Trust — Kustomization Recette
+# Rôle P4 : Livraison & Chaîne d'Approvisionnement
+# ==============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: omnipay-recette
+
+resources:
+  - namespace.yaml
+  - auth-service.yaml
+  - transaction-service.yaml
+  - notification-service.yaml
+  - network-policies.yaml
+
+labels:
+  - pairs:
+      environment: recette
+      app.kubernetes.io/managed-by: argocd
+
+images:
+  - name: harbor.omnipay.local:30002/omnipay/auth-service
+    newTag: "1.0.0"
+  - name: harbor.omnipay.local:30002/omnipay/transaction-service
+    newTag: "1.0.0"
+  - name: harbor.omnipay.local:30002/omnipay/notification-service
+    newTag: "1.0.0"
