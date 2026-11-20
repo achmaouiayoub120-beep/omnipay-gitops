@@ -1,7 +1,7 @@
 # ==============================================================================
 # OmniPay Zero-Trust — Kyverno ClusterPolicy : Vérification Signature Cosign
 # Bloque impitoyablement toute image non signée dans omnipay-prod et omnipay-recette
-# Rôle P4 : Livraison & Chaîne d'Approvisionnement
+# Rôle P4 : Ingénieure Packaging, Registre Harbor & Supply Chain GitOps
 # ==============================================================================
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy

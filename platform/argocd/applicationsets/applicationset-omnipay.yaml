@@ -2,7 +2,7 @@
 # OmniPay Zero-Trust — ApplicationSet Multi-Environnements (GitOps)
 # Génère automatiquement les applications ArgoCD pour dev, recette et prod
 # Dépôt source : https://github.com/achmaouiayoub120-beep/omnipay-gitops.git
-# Rôle P4 : Livraison & Chaîne d'Approvisionnement
+# Rôle P4 : Ingénieure Packaging, Registre Harbor & Supply Chain GitOps
 # ==============================================================================
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -13,50 +13,46 @@ metadata:
     app.kubernetes.io/name: omnipay-applicationset
     app.kubernetes.io/part-of: omnipay-zero-trust
 spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
   generators:
     - list:
         elements:
           - env: dev
             namespace: omnipay-dev
             cluster: https://kubernetes.default.svc
-            autoSyncPrune: true
-            autoSyncSelfHeal: true
-            description: "Environnement d'intégration continue et de développement rapide"
+            autoSync: true
+            description: "Environnement d'intégration continue et de développement rapide (Auto-sync actif)"
           - env: recette
             namespace: omnipay-recette
             cluster: https://kubernetes.default.svc
-            autoSyncPrune: true
-            autoSyncSelfHeal: true
-            description: "Environnement de qualification, tests de charge k6 et scans DAST OWASP ZAP"
+            autoSync: true
+            description: "Environnement de qualification et validation sécurité DAST (Auto-sync actif)"
           - env: prod
             namespace: omnipay-prod
             cluster: https://kubernetes.default.svc
-            autoSyncPrune: false
-            autoSyncSelfHeal: true
-            description: "Environnement de Production bancaire avec Canary Releases (Argo Rollouts)"
+            autoSync: false
+            description: "Environnement de Production bancaire avec synchronisation manuelle contrôlée et Canary Releases"
   template:
     metadata:
-      name: "omnipay-{{env}}"
+      name: "omnipay-{{ .env }}"
       namespace: argocd
       labels:
-        environment: "{{env}}"
+        environment: "{{ .env }}"
         app.kubernetes.io/part-of: omnipay-zero-trust
       annotations:
         argocd.argoproj.io/sync-wave: "1"
-        description: "{{description}}"
+        description: "{{ .description }}"
     spec:
       project: default
       source:
         repoURL: https://github.com/achmaouiayoub120-beep/omnipay-gitops.git
         targetRevision: main
-        path: "envs/{{env}}"
+        path: "envs/{{ .env }}"
       destination:
-        server: "{{cluster}}"
-        namespace: "{{namespace}}"
+        server: "{{ .cluster }}"
+        namespace: "{{ .namespace }}"
       syncPolicy:
-        automated:
-          prune: "{{autoSyncPrune}}"
-          selfHeal: "{{autoSyncSelfHeal}}"
         syncOptions:
           - CreateNamespace=true
           - ApplyOutOfSyncOnly=true
@@ -67,3 +63,11 @@ spec:
             duration: 5s
             factor: 2
             maxDuration: 3m
+  templatePatch: |
+    spec:
+      {{- if .autoSync }}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+      {{- end }}

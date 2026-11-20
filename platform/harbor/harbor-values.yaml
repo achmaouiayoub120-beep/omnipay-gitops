@@ -1,7 +1,8 @@
 # ==============================================================================
-# OmniPay Zero-Trust — Harbor Helm Values (Production / K3s)
+# OmniPay Zero-Trust — Harbor Helm Values (K3s Production & Durcissement)
 # Chart: harbor/harbor (https://helm.goharbor.io)
-# Rôle P4 : Livraison & Chaîne d'Approvisionnement
+# Port d'accès : NodePort 30002 (http://harbor.omnipay.local:30002)
+# Rôle P4 : Ingénieure Packaging, Registre Harbor & Supply Chain GitOps
 # ==============================================================================
 
 # Configuration de l'exposition du service Harbor
@@ -17,18 +18,18 @@ expose:
         nodePort: 30002
       https:
         port: 443
-        nodePort: 30003
+        nodePort: 30012
       notary:
         port: 4443
-        nodePort: 30004
+        nodePort: 30014
 
-# URL externe accessible depuis les nœuds K3s, Jenkins et les développeurs
+# URL externe accessible depuis les nœuds K3s, Jenkins (P1) et les développeurs
 externalURL: http://harbor.omnipay.local:30002
 
 # Secret administrateur initial (conforme Zero-Trust pour bootstrap)
 harborAdminPassword: "HarborAdminOmniPay2026!"
 
-# Scanner de vulnérabilités Trivy intégré
+# Scanner de vulnérabilités Trivy intégré et activé
 trivy:
   enabled: true
   gitHubToken: ""
@@ -45,7 +46,7 @@ trivy:
       cpu: 1000m
       memory: 1536Mi
 
-# Scanner Notary désactivé (remplacé par Cosign dans l'architecture Zero-Trust moderne)
+# Scanner Notary désactivé (remplacé par Sigstore/Cosign dans l'architecture Zero-Trust moderne)
 notary:
   enabled: false
 
@@ -55,17 +56,23 @@ persistence:
   resourcePolicy: "keep"
   persistentVolumeClaim:
     registry:
+      storageClass: "local-path"
       size: 15Gi
     chartmuseum:
+      storageClass: "local-path"
       size: 5Gi
     jobservice:
       jobLog:
+        storageClass: "local-path"
         size: 5Gi
     database:
+      storageClass: "local-path"
       size: 5Gi
     redis:
+      storageClass: "local-path"
       size: 2Gi
     trivy:
+      storageClass: "local-path"
       size: 5Gi
 
 # Composant Core Harbor
@@ -79,7 +86,7 @@ core:
       cpu: 500m
       memory: 512Mi
 
-# Registre d'artefacts OCI
+# Registre d'artefacts OCI (Images, SBOM Syft, Signatures Cosign)
 registry:
   replicas: 1
   resources:
