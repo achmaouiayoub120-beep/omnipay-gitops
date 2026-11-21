@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-loki
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+    app.kubernetes.io/part-of: omnipay-zero-trust
+    app.kubernetes.io/managed-by: helm
+  annotations:
+    description: "Datasource Loki — corrélation Métriques → Logs OmniPay (détecté automatiquement par le sidecar Grafana)"
+data:
+  datasource-loki.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki:3100
+        isDefault: false
+        version: 1
+        editable: false
+        jsonData:
+          maxLines: 5000
+          derivedFields:
+            # Lien automatique Loki → tracing (TraceID extrait des logs Spring Boot)
+            - name: TraceID
+              matcherRegex: '"traceId":"(\w+)"'
+              url: ''
+              urlDisplayLabel: 'Voir la trace'
+        secureJsonData: {}

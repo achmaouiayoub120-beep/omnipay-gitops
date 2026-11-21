@@ -1,0 +1,121 @@
+# =============================================================================
+# values-promtail.yaml — Promtail DaemonSet pour OmniPay Zero-Trust (K3s)
+# Collecte /var/log/pods avec parsing Spring Boot multilignes
+# Auteur : P5 — Moad Helkamel | Date : 2026-11-21
+# Installation : helm install promtail grafana/promtail
+#                --namespace monitoring -f values-promtail.yaml
+# =============================================================================
+
+config:
+  clients:
+    - url: http://loki:3100/loki/api/v1/push
+      tenant_id: omnipay
+      backoff_config:
+        min_period: 500ms
+        max_period: 5m
+        max_retries: 10
+      timeout: 10s
+
+  scrape_configs:
+    # ── Logs des pods Kubernetes (microservices OmniPay) ─────────────────────
+    - job_name: kubernetes-pods
+      pipeline_stages:
+        # 1. Parser le format CRI (containerd/K3s)
+        - cri: {}
+
+        # 2. Parser les logs JSON Spring Boot
+        - json:
+            expressions:
+              level: level
+              message: message
+              timestamp: timestamp
+              logger: logger
+              traceId: traceId
+
+        # 3. Parser les stacktraces multilignes Spring Boot
+        - multiline:
+            firstline: '^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}'
+            max_wait_time: 3s
+            max_lines: 128
+
+        # 4. Labels dynamiques extraits du contenu
+        - labels:
+            level:
+            traceId:
+
+        # 5. Timestamp depuis les logs Spring Boot
+        - timestamp:
+            source: timestamp
+            format: RFC3339Nano
+            fallback_formats:
+              - "2006-01-02T15:04:05.000Z"
+              - "2006-01-02 15:04:05"
+
+      kubernetes_sd_configs:
+        - role: pod
+
+      relabel_configs:
+        # Inclure uniquement les pods avec le label monitored: "true"
+        - source_labels: [__meta_kubernetes_pod_label_monitored]
+          action: keep
+          regex: "true"
+
+        # Labels utiles pour corrélation Grafana ↔ Prometheus
+        - source_labels: [__meta_kubernetes_namespace]
+          target_label: namespace
+        - source_labels: [__meta_kubernetes_pod_name]
+          target_label: pod
+        - source_labels: [__meta_kubernetes_pod_container_name]
+          target_label: container
+        - source_labels: [__meta_kubernetes_pod_label_app]
+          target_label: app
+        - source_labels: [__meta_kubernetes_pod_node_name]
+          target_label: node
+
+        # Chemin du fichier de log
+        - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+          target_label: __path__
+          separator: /
+          replacement: /var/log/pods/*$1*/$2/*.log
+
+    # ── Logs système K3s (optionnel) ─────────────────────────────────────────
+    - job_name: k3s-system
+      static_configs:
+        - targets: [localhost]
+          labels:
+            job: k3s-system
+            __path__: /var/log/syslog
+
+# Ressources DaemonSet (1 pod par nœud K3s)
+resources:
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
+  limits:
+    cpu: "200m"
+    memory: "128Mi"
+
+# Tolérances pour être déployé sur tous les nœuds (y compris master K3s)
+tolerations:
+  - key: node-role.kubernetes.io/master
+    operator: Exists
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+
+# Volumes pour accéder aux logs des pods
+extraVolumes:
+  - name: pods-logs
+    hostPath:
+      path: /var/log/pods
+
+extraVolumeMounts:
+  - name: pods-logs
+    mountPath: /var/log/pods
+    readOnly: true
+
+serviceMonitor:
+  enabled: true
+  labels:
+    release: kube-prometheus-stack

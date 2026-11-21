@@ -1,20 +1,11 @@
 # =============================================================================
-# kube-prometheus-stack — Helm Values pour OmniPay Zero-Trust (K3s)
-# =============================================================================
-# Cluster cible  : K3s (ressources limitées)
-# Namespace       : monitoring
-# Auteur          : P5 — Équipe SRE / Observabilité
-# Date            : 2026-11-19
-# Installation    : helm install monitoring prometheus-community/kube-prometheus-stack
-#                   --namespace monitoring -f values-prometheus.yaml
+# kube-prometheus-stack — Helm Values OmniPay Zero-Trust (K3s) — S2
+# Mise à jour : Alertmanager webhook routing + sidecar dashboards Grafana
+# Auteur : P5 — Moad Helkamel | Date : 2026-11-21
 # =============================================================================
 
-# -----------------------------------------------------------------------------
-# 1. Prometheus Server
-# -----------------------------------------------------------------------------
 prometheus:
   prometheusSpec:
-    # Accepter TOUS les ServiceMonitor / PodMonitor / PrometheusRule
     serviceMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelector: {}
     serviceMonitorNamespaceSelector: {}
@@ -24,16 +15,10 @@ prometheus:
     ruleSelectorNilUsesHelmValues: false
     ruleSelector: {}
     ruleNamespaceSelector: {}
-
-    # Rétention 7 jours
     retention: 7d
     retentionSize: "5GB"
-
-    # Intervalle de scrape par défaut
     scrapeInterval: 15s
     evaluationInterval: 30s
-
-    # Ressources adaptées K3s
     resources:
       requests:
         memory: "512Mi"
@@ -41,8 +26,6 @@ prometheus:
       limits:
         memory: "1Gi"
         cpu: "500m"
-
-    # Stockage persistant
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -50,25 +33,20 @@ prometheus:
           resources:
             requests:
               storage: 10Gi
-
-  # Exposer en NodePort 30900
   service:
     type: NodePort
     nodePort: 30900
 
 # -----------------------------------------------------------------------------
-# 2. Grafana
+# Grafana — Sidecar dashboards as Code activé (S2)
 # -----------------------------------------------------------------------------
 grafana:
   enabled: true
   adminUser: admin
-  # Mot de passe de simulation académique — migration vers SealedSecrets en S2
   adminPassword: "GrafanaOmniPay2026!"
-
   service:
     type: NodePort
     nodePort: 30300
-
   resources:
     requests:
       memory: "256Mi"
@@ -76,7 +54,6 @@ grafana:
     limits:
       memory: "512Mi"
       cpu: "250m"
-
   sidecar:
     datasources:
       enabled: true
@@ -84,23 +61,33 @@ grafana:
     dashboards:
       enabled: true
       searchNamespace: monitoring
-
+      label: grafana_dashboard
+      labelValue: "1"
+      folderAnnotation: "grafana-folder"
+      provider:
+        foldersFromFilesStructure: true
   defaultDashboardsEnabled: true
   defaultDashboardsTimezone: Europe/Paris
-
   plugins:
     - grafana-piechart-panel
+  # Datasource Loki provisionnée automatiquement (S2)
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki:3100
+      access: proxy
+      isDefault: false
+      jsonData:
+        maxLines: 1000
 
 # -----------------------------------------------------------------------------
-# 3. Alertmanager
+# Alertmanager — Routage webhook (Discord / Slack / Telegram) — S2
 # -----------------------------------------------------------------------------
 alertmanager:
   enabled: true
-
   service:
     type: NodePort
     nodePort: 30903
-
   alertmanagerSpec:
     resources:
       requests:
@@ -110,32 +97,70 @@ alertmanager:
         memory: "256Mi"
         cpu: "100m"
     retention: 120h
-
   config:
     global:
       resolve_timeout: 5m
+    # -------------------------------------------------------------------------
+    # Arbre de routage Google SRE Multi-Burn-Rate
+    # -------------------------------------------------------------------------
     route:
-      group_by: ['alertname', 'namespace', 'service']
+      group_by: ['alertname', 'namespace', 'service', 'severity']
       group_wait: 30s
-      group_interval: 5m
-      repeat_interval: 4h
-      receiver: 'default-receiver'
+      group_interval: 2m
+      repeat_interval: 1h
+      receiver: 'default-webhook'
+      routes:
+        # CRITIQUE : envoi immédiat (group_wait: 10s)
+        - matchers:
+            - name: severity
+              value: critical
+          receiver: 'critical-webhook'
+          group_wait: 10s
+          repeat_interval: 30m
+          continue: false
+        # WARNING : envoi standard
+        - matchers:
+            - name: severity
+              value: warning
+          receiver: 'warning-webhook'
+          group_wait: 30s
+          repeat_interval: 2h
+          continue: false
+    # -------------------------------------------------------------------------
+    # Récepteurs — Remplacer WEBHOOK_URL avant déploiement
+    # Discord  : https://discord.com/api/webhooks/<ID>/<TOKEN>
+    # Slack    : https://hooks.slack.com/services/T.../B.../...
+    # -------------------------------------------------------------------------
     receivers:
-      - name: 'default-receiver'
-        # Webhook/email à configurer en S2
+      - name: 'default-webhook'
+        webhook_configs:
+          - url: 'http://WEBHOOK_URL_EQUIPE/alertmanager'
+            send_resolved: true
+      - name: 'critical-webhook'
+        webhook_configs:
+          - url: 'http://WEBHOOK_URL_EQUIPE/alertmanager'
+            send_resolved: true
+            max_alerts: 0
+      - name: 'warning-webhook'
+        webhook_configs:
+          - url: 'http://WEBHOOK_URL_EQUIPE/alertmanager'
+            send_resolved: true
+    # Inhibition : ne pas notifier warning si critical actif sur même service
+    inhibit_rules:
+      - source_matchers:
+          - name: severity
+            value: critical
+        target_matchers:
+          - name: severity
+            value: warning
+        equal: ['alertname', 'service']
 
-# -----------------------------------------------------------------------------
-# 4. Node Exporter
-# -----------------------------------------------------------------------------
 nodeExporter:
   enabled: true
   resources:
     requests: { memory: "64Mi", cpu: "50m" }
     limits:   { memory: "128Mi", cpu: "100m" }
 
-# -----------------------------------------------------------------------------
-# 5. kube-state-metrics
-# -----------------------------------------------------------------------------
 kubeStateMetrics:
   enabled: true
 kube-state-metrics:
@@ -143,17 +168,12 @@ kube-state-metrics:
     requests: { memory: "64Mi", cpu: "50m" }
     limits:   { memory: "128Mi", cpu: "100m" }
 
-# -----------------------------------------------------------------------------
-# 6. Prometheus Operator
-# -----------------------------------------------------------------------------
 prometheusOperator:
   resources:
     requests: { memory: "128Mi", cpu: "100m" }
     limits:   { memory: "256Mi", cpu: "200m" }
 
-# -----------------------------------------------------------------------------
-# 7. Composants désactivés (non compatibles K3s)
-# -----------------------------------------------------------------------------
+# Composants désactivés (non compatibles K3s)
 kubeEtcd:
   enabled: false
 kubeControllerManager:
@@ -163,9 +183,6 @@ kubeScheduler:
 kubeProxy:
   enabled: false
 
-# -----------------------------------------------------------------------------
-# 8. Labels globaux
-# -----------------------------------------------------------------------------
 commonLabels:
   project: omnipay
   team: sre-p5

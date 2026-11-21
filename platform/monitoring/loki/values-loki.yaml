@@ -1,0 +1,82 @@
+# =============================================================================
+# values-loki.yaml — Grafana Loki SingleBinary pour OmniPay Zero-Trust (K3s)
+# Mode : SingleBinary (1 pod monolithique) — optimisé ressources limitées K3s
+# Auteur : P5 — Moad Helkamel | Date : 2026-11-21
+# Installation : helm install loki grafana/loki
+#                --namespace monitoring -f values-loki.yaml
+# =============================================================================
+
+deploymentMode: SingleBinary
+
+loki:
+  commonConfig:
+    replication_factor: 1
+
+  storage:
+    type: filesystem
+
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+  limits_config:
+    retention_period: 168h          # 7 jours de rétention
+    ingestion_rate_mb: 8
+    ingestion_burst_size_mb: 16
+    max_query_series: 5000
+    max_entries_limit_per_query: 50000
+
+  storage_config:
+    filesystem:
+      directory: /var/loki/chunks
+
+  compactor:
+    retention_enabled: true
+    working_directory: /var/loki/compactor
+
+  auth_enabled: false
+
+singleBinary:
+  replicas: 1
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  persistence:
+    enabled: true
+    storageClass: "local-path"      # Classe de stockage K3s par défaut
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
+
+# Désactiver les composants inutiles en mode SingleBinary
+gateway:
+  enabled: false
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack
+  selfMonitoring:
+    enabled: false
+  lokiCanary:
+    enabled: false
+
+test:
+  enabled: false

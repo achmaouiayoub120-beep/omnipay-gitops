@@ -1,0 +1,205 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: omnipay-slo-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: omnipay-zero-trust
+    app.kubernetes.io/managed-by: helm
+    release: kube-prometheus-stack
+    role: alert-rules
+spec:
+  groups:
+    # =========================================================================
+    # GROUPE 1 : Alertes Budget d'Erreur (Multi-Burn-Rate Google SRE)
+    # SLO cible : 99.5% disponibilité Transaction Service sur 30 jours
+    # Budget d'erreur = 0.5% = 3h 36min par mois
+    # =========================================================================
+    - name: omnipay.slo.burn_rate
+      interval: 30s
+      rules:
+        # --- Alerte CRITIQUE : Burn Rate 14.4x (perte 2% budget en 1h) ---
+        - alert: OmniPayBurnRateCritical
+          expr: |
+            (
+              sum(rate(http_server_requests_seconds_count{status=~"5..",job=~".*omnipay.*"}[1h]))
+              /
+              sum(rate(http_server_requests_seconds_count{job=~".*omnipay.*"}[1h]))
+            ) > (14.4 * (1 - 0.995))
+          for: 2m
+          labels:
+            severity: critical
+            team: p5-sre
+            service: omnipay-platform
+            slo: "99.5"
+          annotations:
+            summary: "🔴 CRITIQUE — Budget d'erreur OmniPay en épuisement rapide"
+            description: |
+              Le budget d'erreur de la plateforme bancaire se consume à vitesse critique !
+              Burn Rate actuel : {{ $value | humanizePercentage }} (seuil 7.2%)
+              À ce rythme, le SLA 99.5% sera violé dans les prochaines heures.
+              Risque de rupture de SLA client. Intervention immédiate requise.
+            runbook_url: "https://github.com/achmaouiayoub120-beep/omnipay-app/blob/main/docs/runbooks/slo-breach.md"
+            dashboard_url: "http://GRAFANA_IP:30300/d/omnipay-slo-golden"
+
+        # --- Alerte WARNING : Burn Rate 6x sur 6h (perte 5% budget en 6h) ---
+        - alert: OmniPayBurnRateWarning
+          expr: |
+            (
+              sum(rate(http_server_requests_seconds_count{status=~"5..",job=~".*omnipay.*"}[6h]))
+              /
+              sum(rate(http_server_requests_seconds_count{job=~".*omnipay.*"}[6h]))
+            ) > (6 * (1 - 0.995))
+          for: 15m
+          labels:
+            severity: warning
+            team: p5-sre
+            service: omnipay-platform
+            slo: "99.5"
+          annotations:
+            summary: "🟡 WARNING — Budget d'erreur OmniPay en consommation élevée"
+            description: |
+              Le budget d'erreur se consomme plus vite que prévu sur les 6 dernières heures.
+              Burn Rate 6h : {{ $value | humanizePercentage }}
+              Surveillance renforcée recommandée.
+            runbook_url: "https://github.com/achmaouiayoub120-beep/omnipay-app/blob/main/docs/runbooks/slo-breach.md"
+
+    # =========================================================================
+    # GROUPE 2 : Alertes Latence
+    # =========================================================================
+    - name: omnipay.slo.latency
+      interval: 30s
+      rules:
+        # --- Alerte WARNING : Latence p95 > 200ms pendant 5min ---
+        - alert: OmniPayLatencySloBreach
+          expr: |
+            histogram_quantile(
+              0.95,
+              sum(rate(http_server_requests_seconds_bucket{
+                uri="/api/transactions/transfer",
+                job=~".*omnipay.*"
+              }[5m])) by (le)
+            ) > 0.2
+          for: 5m
+          labels:
+            severity: warning
+            team: p5-sre
+            service: transaction-service
+            slo_type: latency
+          annotations:
+            summary: "🟡 Latence P95 transaction dépasse le SLO (200ms)"
+            description: |
+              La latence P95 sur /api/transactions/transfer est de {{ $value | humanizeDuration }}.
+              Seuil SLO : 200ms. Durée dépassement : > 5 minutes.
+              Impact potentiel sur l'expérience utilisateur des virements bancaires.
+            runbook_url: "https://github.com/achmaouiayoub120-beep/omnipay-app/blob/main/docs/runbooks/latency-high.md"
+            dashboard_url: "http://GRAFANA_IP:30300/d/omnipay-slo-golden"
+
+        # --- Alerte CRITIQUE : Latence p99 > 500ms pendant 2min ---
+        - alert: OmniPayLatencyCritical
+          expr: |
+            histogram_quantile(
+              0.99,
+              sum(rate(http_server_requests_seconds_bucket{
+                uri="/api/transactions/transfer",
+                job=~".*omnipay.*"
+              }[5m])) by (le)
+            ) > 0.5
+          for: 2m
+          labels:
+            severity: critical
+            team: p5-sre
+            service: transaction-service
+            slo_type: latency
+          annotations:
+            summary: "🔴 CRITIQUE — Latence P99 transaction > 500ms"
+            description: |
+              La latence P99 sur /api/transactions/transfer est de {{ $value | humanizeDuration }}.
+              Transactions bancaires critiquement dégradées. Intervention immédiate.
+
+    # =========================================================================
+    # GROUPE 3 : Disponibilité des microservices
+    # =========================================================================
+    - name: omnipay.availability
+      interval: 30s
+      rules:
+        # --- Alerte CRITIQUE : Microservice down depuis 1 min ---
+        - alert: OmniPayMicroserviceDown
+          expr: |
+            up{job=~".*omnipay.*"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            team: p5-sre
+            slo_type: availability
+          annotations:
+            summary: "🔴 CRITIQUE — Microservice OmniPay inaccessible : {{ $labels.job }}"
+            description: |
+              Le microservice {{ $labels.job }} ne répond plus au scrape Prometheus.
+              Instance : {{ $labels.instance }}
+              Hors ligne depuis plus d'1 minute. Vérifiez l'état du pod K3s immédiatement.
+              Commande : kubectl get pods -n default -l app={{ $labels.job }}
+            runbook_url: "https://github.com/achmaouiayoub120-beep/omnipay-app/blob/main/docs/runbooks/service-down.md"
+
+        # --- Alerte WARNING : Taux d'erreurs > 1% global ---
+        - alert: OmniPayHighErrorRate
+          expr: |
+            sum(rate(http_server_requests_seconds_count{status=~"5..",job=~".*omnipay.*"}[5m]))
+            /
+            sum(rate(http_server_requests_seconds_count{job=~".*omnipay.*"}[5m]))
+            > 0.01
+          for: 3m
+          labels:
+            severity: warning
+            team: p5-sre
+            slo_type: error_rate
+          annotations:
+            summary: "🟡 Taux d'erreurs HTTP 5xx > 1% sur la plateforme OmniPay"
+            description: |
+              Taux d'erreur 5xx actuel : {{ $value | humanizePercentage }}
+              Durée : > 3 minutes. Vérifiez les logs applicatifs Loki.
+
+    # =========================================================================
+    # GROUPE 4 : Saturation ressources
+    # =========================================================================
+    - name: omnipay.saturation
+      interval: 60s
+      rules:
+        # --- Alerte WARNING : Pool HikariCP > 85% pendant 3 min ---
+        - alert: OmniPayHighDatabasePoolUsage
+          expr: |
+            sum(hikaricp_connections_active) by (application)
+            /
+            sum(hikaricp_connections_max) by (application)
+            > 0.85
+          for: 3m
+          labels:
+            severity: warning
+            team: p5-sre
+            service: database
+            slo_type: saturation
+          annotations:
+            summary: "🟡 Pool de connexions HikariCP saturé (> 85%) — {{ $labels.application }}"
+            description: |
+              Le pool de connexions PostgreSQL de {{ $labels.application }} est utilisé à {{ $value | humanizePercentage }}.
+              Risque de dégradation des transactions si ce niveau persiste.
+              Vérifiez les requêtes SQL lentes et augmentez maximumPoolSize si nécessaire.
+            runbook_url: "https://github.com/achmaouiayoub120-beep/omnipay-app/blob/main/docs/runbooks/db-pool-saturation.md"
+
+        # --- Alerte WARNING : Heap JVM > 80% pendant 5 min ---
+        - alert: OmniPayJvmHeapPressure
+          expr: |
+            sum(jvm_memory_used_bytes{area="heap"}) by (application)
+            /
+            sum(jvm_memory_max_bytes{area="heap"}) by (application)
+            > 0.80
+          for: 5m
+          labels:
+            severity: warning
+            team: p5-sre
+            slo_type: saturation
+          annotations:
+            summary: "🟡 Pression mémoire JVM Heap > 80% — {{ $labels.application }}"
+            description: |
+              La mémoire JVM Heap de {{ $labels.application }} est utilisée à {{ $value | humanizePercentage }}.
+              Risque d'OutOfMemoryError imminent. Vérifiez les fuites mémoire.
