@@ -1,0 +1,48 @@
+# ==============================================================================
+# OmniPay Zero-Trust — Kyverno ClusterPolicy : Vérification Signature Cosign
+# Bloque impitoyablement toute image non signée dans omnipay-prod et omnipay-recette
+# Rôle P4 : Ingénieure Packaging, Registre Harbor & Supply Chain GitOps
+# ==============================================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-omnipay-image-signature
+  annotations:
+    policies.kyverno.io/title: "Vérification cryptographique des images conteneurs (Cosign)"
+    policies.kyverno.io/category: "Supply Chain Security Zero-Trust"
+    policies.kyverno.io/severity: "critical"
+    policies.kyverno.io/subject: "Pod"
+    policies.kyverno.io/description: >-
+      Exige que toutes les images déployées dans les environnements omnipay-prod
+      et omnipay-recette soient signées avec la clé privée de la CI OmniPay via Cosign.
+      Tout conteneur sans signature valide ou altéré est immédiatement rejeté à l'admission.
+spec:
+  validationFailureAction: Enforce
+  webhookTimeoutSeconds: 30
+  failurePolicy: Fail
+  background: false
+  rules:
+    - name: verify-cosign-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - omnipay-prod
+                - omnipay-recette
+      verifyImages:
+        - imageReferences:
+            - "harbor.omnipay.local:30002/omnipay/*"
+            - "harbor.omnipay.local/omnipay/*"
+            - "*/omnipay/*"
+          attestors:
+            - entries:
+                - keys:
+                    publicKeys: |
+                      -----BEGIN PUBLIC KEY-----
+                      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEYbnNwn/mWYpQie9be39EUGJSIQ1d
+                      FgvkavZHyp9NCAIOqzuQqP5OTAzIKIi/V0yEXggJrUcU2dN9ZRFBrxZ5Ew==
+                      -----END PUBLIC KEY-----
+          mutateDigest: false
+          required: true

@@ -1,0 +1,10 @@
+# ==============================================================================
+# OmniPay Zero-Trust — Namespace Recette
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: omnipay-recette
+  labels:
+    environment: recette
+    app.kubernetes.io/part-of: omnipay-zero-trust

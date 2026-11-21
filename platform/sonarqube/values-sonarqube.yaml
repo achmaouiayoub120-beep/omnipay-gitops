@@ -1,0 +1,111 @@
+# ==============================================================================
+# OmniPay Zero-Trust — SonarQube Community 10.x Helm Values (K3s)
+# Chart: sonarqube/sonarqube (https://SonarSource.github.io/helm-chart-sonarqube)
+# Rôle P4 : Ingénieure Packaging, Registre Harbor & Supply Chain GitOps
+# ==============================================================================
+
+# Édition Community 10.x
+edition: "community"
+
+image:
+  repository: "sonarqube"
+  tag: "10.7.0-community"
+  pullPolicy: "IfNotPresent"
+
+# ------------------------------------------------------------------------------
+# Dimensionnement des ressources (Contraintes K3s : 2Gi RAM / 1 CPU max)
+# ------------------------------------------------------------------------------
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "1"
+    memory: "2Gi"
+
+# Configuration JVM adaptée à la limite de 2Gi RAM
+jvmOpts: "-Xms512m -Xmx1536m -XX:+UseG1GC"
+
+# Paramètres SonarQube
+sonarProperties:
+  sonar.core.serverBaseURL: "http://sonarqube.omnipay.local:30003"
+  sonar.web.javaOpts: "-Xms256m -Xmx768m -XX:+UseG1GC"
+  sonar.ce.javaOpts: "-Xms256m -Xmx768m -XX:+UseG1GC"
+  sonar.search.javaOpts: "-Xms256m -Xmx512m -XX:+UseG1GC"
+
+# ------------------------------------------------------------------------------
+# Exposition Réseau (NodePort 30003 & Ingress Traefik/K3s)
+# ------------------------------------------------------------------------------
+service:
+  type: NodePort
+  externalPort: 9000
+  internalPort: 9000
+  nodePort: 30003
+  labels:
+    app.kubernetes.io/name: sonarqube
+    app.kubernetes.io/part-of: omnipay-zero-trust
+
+ingress:
+  enabled: true
+  ingressClassName: "traefik"
+  hosts:
+    - name: "sonarqube.omnipay.local"
+      paths:
+        - path: /
+          pathType: Prefix
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+
+# ------------------------------------------------------------------------------
+# Persistance SonarQube (K3s local-path)
+# ------------------------------------------------------------------------------
+persistence:
+  enabled: true
+  storageClass: "local-path"
+  accessMode: ReadWriteOnce
+  size: 10Gi
+
+# ------------------------------------------------------------------------------
+# Base de données PostgreSQL subchart (local-path)
+# ------------------------------------------------------------------------------
+postgresql:
+  enabled: true
+  auth:
+    username: "sonar"
+    password: "SonarPostgresOmniPay2026!"
+    database: "sonarqube"
+  persistence:
+    enabled: true
+    storageClass: "local-path"
+    size: 5Gi
+  primary:
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+# ------------------------------------------------------------------------------
+# Sonde de disponibilité & Sysctl
+# ------------------------------------------------------------------------------
+initSysctl:
+  enabled: true
+  vmMaxMapCount: 262144
+
+readinessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 10
+
+livenessProbe:
+  initialDelaySeconds: 90
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 10
+
+# Métriques Prometheus pour observabilité P5
+prometheusExporter:
+  enabled: true

@@ -1,0 +1,45 @@
+# =============================================================================
+# ServiceMonitor — Scraping des microservices OmniPay Zero-Trust
+# =============================================================================
+# Cible       : Pods avec label monitored: "true"
+# Endpoint    : /actuator/prometheus (Spring Boot Actuator + Micrometer)
+# Namespaces  : omnipay-dev, omnipay-recette, omnipay-prod
+# Auteur      : P5 — Équipe SRE
+# =============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: omnipay-services-monitor
+  namespace: monitoring
+  labels:
+    release: monitoring
+    app.kubernetes.io/part-of: omnipay
+    app.kubernetes.io/managed-by: sre-p5
+spec:
+  # Namespaces à surveiller
+  namespaceSelector:
+    matchNames:
+      - omnipay-dev
+      - omnipay-recette
+      - omnipay-prod
+
+  # Sélection des Services portant le label monitored: "true"
+  selector:
+    matchLabels:
+      monitored: "true"
+
+  # Endpoint de scrape
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s
+      scrapeTimeout: 10s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: environment
+          regex: "omnipay-(.*)"
+          replacement: "$1"
+        - sourceLabels: [__meta_kubernetes_pod_label_app]
+          targetLabel: application
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
