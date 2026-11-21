@@ -1,12 +1,12 @@
 # ==============================================================================
 # OmniPay Zero-Trust — AnalysisTemplate : Taux d'erreur HTTP 5xx (Environnement Prod)
-# Source de métriques : Prometheus interne (kube-prometheus-stack P5)
-# Rôle P4 : Livraison & Chaîne d'Approvisionnement
+# Source de métriques : Prometheus interne (kube-prometheus-stack)
+# Rôle P4 : Widad El Gharzaz (Packaging, Harbor, Argo Rollouts & Kyverno)
 # ==============================================================================
 apiVersion: argoproj.io/v1alpha1
 kind: AnalysisTemplate
 metadata:
-  name: prometheus-error-rate-5xx
+  name: prometheus-error-rate
   namespace: omnipay-prod
   labels:
     app.kubernetes.io/name: transaction-service
@@ -17,16 +17,16 @@ spec:
       value: transaction-service
   metrics:
     - name: http-5xx-error-rate
-      interval: 10s
+      interval: 15s
       count: 3
       failureLimit: 1
-      successCondition: result[0] < 2.0
+      successCondition: result[0] < 0.5
       provider:
         prometheus:
           address: http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090
           query: |
             (
-              sum(rate(http_requests_total{status=~"5.*", app="{{args.service-name}}"}[1m]))
+              sum(rate(http_server_requests_seconds_count{service="{{args.service-name}}", status=~"5.."}[2m]))
               /
-              (sum(rate(http_requests_total{app="{{args.service-name}}"}[1m])) > 0)
+              (sum(rate(http_server_requests_seconds_count{service="{{args.service-name}}"}[2m])) > 0)
             ) * 100 or vector(0)

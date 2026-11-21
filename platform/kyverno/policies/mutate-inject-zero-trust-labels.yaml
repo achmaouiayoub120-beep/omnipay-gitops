@@ -1,0 +1,67 @@
+# ==============================================================================
+# OmniPay Zero-Trust — Kyverno ClusterPolicy : Mutation Labels Zero-Trust & Seccomp
+# Injecte les labels de gouvernance Zero-Trust et le profil Seccomp RuntimeDefault
+# Rôle P4 : Widad El Gharzaz (Packaging, Harbor, Argo Rollouts & Kyverno)
+# ==============================================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: mutate-inject-zero-trust-labels
+  annotations:
+    policies.kyverno.io/title: "Injection automatique des labels Zero-Trust et du SeccompProfile"
+    policies.kyverno.io/category: "Zero-Trust Runtime Hardening"
+    policies.kyverno.io/severity: "medium"
+    policies.kyverno.io/subject: "Pod, Deployment"
+    policies.kyverno.io/description: >-
+      Injecte automatiquement les labels de conformité Zero-Trust
+      (security.omnipay.local/enforced, app.kubernetes.io/managed-by,
+      network.omnipay.local/segment) et impose le profil Seccomp RuntimeDefault
+      sur tous les Pods et Deployments déployés dans les namespaces omnipay-*.
+spec:
+  rules:
+    - name: inject-zero-trust-pod-metadata
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "omnipay-*"
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            labels:
+              +(security.omnipay.local/enforced): "true"
+              +(app.kubernetes.io/managed-by): "argocd"
+              +(network.omnipay.local/segment): "banking-core"
+          spec:
+            securityContext:
+              +(seccompProfile):
+                +(type): "RuntimeDefault"
+
+    - name: inject-zero-trust-deployment-metadata
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+              namespaces:
+                - "omnipay-*"
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            labels:
+              +(security.omnipay.local/enforced): "true"
+              +(app.kubernetes.io/managed-by): "argocd"
+              +(network.omnipay.local/segment): "banking-core"
+          spec:
+            template:
+              metadata:
+                labels:
+                  +(security.omnipay.local/enforced): "true"
+                  +(app.kubernetes.io/managed-by): "argocd"
+                  +(network.omnipay.local/segment): "banking-core"
+              spec:
+                securityContext:
+                  +(seccompProfile):
+                    +(type): "RuntimeDefault"
