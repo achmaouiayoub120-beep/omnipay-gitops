@@ -1,0 +1,188 @@
+# =============================================================================
+# kube-prometheus-stack — Helm Values OmniPay Zero-Trust (K3s) — S2
+# Mise à jour : Alertmanager webhook routing + sidecar dashboards Grafana
+# Auteur : P5 — Moad Helkamel | Date : 2026-11-21
+# =============================================================================
+
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector: {}
+    ruleNamespaceSelector: {}
+    retention: 7d
+    retentionSize: "5GB"
+    scrapeInterval: 15s
+    evaluationInterval: 30s
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+  service:
+    type: NodePort
+    nodePort: 30900
+
+# -----------------------------------------------------------------------------
+# Grafana — Sidecar dashboards as Code activé (S2)
+# -----------------------------------------------------------------------------
+grafana:
+  enabled: true
+  adminUser: admin
+  adminPassword: "GrafanaOmniPay2026!"
+  service:
+    type: NodePort
+    nodePort: 30300
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+  sidecar:
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: true
+    dashboards:
+      enabled: true
+      searchNamespace: monitoring
+      label: grafana_dashboard
+      labelValue: "1"
+      folderAnnotation: "grafana-folder"
+      provider:
+        foldersFromFilesStructure: true
+  defaultDashboardsEnabled: true
+  defaultDashboardsTimezone: Europe/Paris
+  plugins:
+    - grafana-piechart-panel
+  # Datasource Loki provisionnée automatiquement (S2)
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki:3100
+      access: proxy
+      isDefault: false
+      jsonData:
+        maxLines: 1000
+
+# -----------------------------------------------------------------------------
+# Alertmanager — Routage webhook (Discord / Slack / Telegram) — S2
+# -----------------------------------------------------------------------------
+alertmanager:
+  enabled: true
+  service:
+    type: NodePort
+    nodePort: 30903
+  alertmanagerSpec:
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "50m"
+      limits:
+        memory: "256Mi"
+        cpu: "100m"
+    retention: 120h
+  config:
+    global:
+      resolve_timeout: 5m
+    # -------------------------------------------------------------------------
+    # Arbre de routage Google SRE Multi-Burn-Rate
+    # -------------------------------------------------------------------------
+    route:
+      group_by: ['alertname', 'namespace', 'service', 'severity']
+      group_wait: 30s
+      group_interval: 2m
+      repeat_interval: 1h
+      receiver: 'default-webhook'
+      routes:
+        # CRITIQUE : envoi immédiat (group_wait: 10s)
+        - matchers:
+            - name: severity
+              value: critical
+          receiver: 'critical-webhook'
+          group_wait: 10s
+          repeat_interval: 30m
+          continue: false
+        # WARNING : envoi standard
+        - matchers:
+            - name: severity
+              value: warning
+          receiver: 'warning-webhook'
+          group_wait: 30s
+          repeat_interval: 2h
+          continue: false
+    # -------------------------------------------------------------------------
+    # Récepteurs — Remplacer WEBHOOK_URL avant déploiement
+    # Discord  : https://discord.com/api/webhooks/<ID>/<TOKEN>
+    # Slack    : https://hooks.slack.com/services/T.../B.../...
+    # -------------------------------------------------------------------------
+    receivers:
+      - name: 'default-webhook'
+        webhook_configs:
+          - url: 'http://WEBHOOK_URL_EQUIPE/alertmanager'
+            send_resolved: true
+      - name: 'critical-webhook'
+        webhook_configs:
+          - url: 'http://WEBHOOK_URL_EQUIPE/alertmanager'
+            send_resolved: true
+            max_alerts: 0
+      - name: 'warning-webhook'
+        webhook_configs:
+          - url: 'http://WEBHOOK_URL_EQUIPE/alertmanager'
+            send_resolved: true
+    # Inhibition : ne pas notifier warning si critical actif sur même service
+    inhibit_rules:
+      - source_matchers:
+          - name: severity
+            value: critical
+        target_matchers:
+          - name: severity
+            value: warning
+        equal: ['alertname', 'service']
+
+nodeExporter:
+  enabled: true
+  resources:
+    requests: { memory: "64Mi", cpu: "50m" }
+    limits:   { memory: "128Mi", cpu: "100m" }
+
+kubeStateMetrics:
+  enabled: true
+kube-state-metrics:
+  resources:
+    requests: { memory: "64Mi", cpu: "50m" }
+    limits:   { memory: "128Mi", cpu: "100m" }
+
+prometheusOperator:
+  resources:
+    requests: { memory: "128Mi", cpu: "100m" }
+    limits:   { memory: "256Mi", cpu: "200m" }
+
+# Composants désactivés (non compatibles K3s)
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+commonLabels:
+  project: omnipay
+  team: sre-p5

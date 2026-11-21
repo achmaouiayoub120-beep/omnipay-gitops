@@ -1,0 +1,172 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: omnipay-grafana-dashboards
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: omnipay-zero-trust
+    app.kubernetes.io/managed-by: helm
+  annotations:
+    grafana-folder: "OmniPay Zero-Trust"
+    description: "Dashboards OmniPay SLO Golden Signals et JVM Actuator — provisionnes automatiquement par le sidecar Grafana"
+data:
+  # Les fichiers JSON des dashboards sont montés directement ici.
+  # Le sidecar Grafana (grafana-sc-dashboard) detecte le label grafana_dashboard: "1"
+  # et recharge automatiquement les dashboards sans redemarrage.
+  #
+  # Pour mettre a jour un dashboard :
+  #   1. Exporter le JSON depuis Grafana UI
+  #   2. Remplacer le contenu ci-dessous
+  #   3. kubectl apply -f grafana-dashboards-configmap.yaml
+  #
+  # NOTE : Les fichiers JSON complets sont references dans le dossier dashboards/
+  # et montes via le Helm values (sidecar.dashboards.enabled: true)
+  dashboard-slo-golden-signals.json: |
+    {
+      "title": "OmniPay — Executive SLOs & Golden Signals",
+      "uid": "omnipay-slo-golden",
+      "tags": ["omnipay", "slo", "golden-signals", "p5"],
+      "schemaVersion": 38,
+      "version": 1,
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "panels": [
+        {
+          "id": 1,
+          "type": "gauge",
+          "title": "Disponibilite Transaction Service (SLO 99.5%)",
+          "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0.98, "max": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"color": "red", "value": null},
+                  {"color": "orange", "value": 0.99},
+                  {"color": "green", "value": 0.995}
+                ]
+              }
+            }
+          },
+          "targets": [{
+            "expr": "1 - (sum(rate(http_server_requests_seconds_count{uri=\"/api/transactions/transfer\",status=~\"5..\"}[30d])) or vector(0)) / (sum(rate(http_server_requests_seconds_count{uri=\"/api/transactions/transfer\"}[30d])) or vector(1))",
+            "legendFormat": "Disponibilite 30j",
+            "refId": "A"
+          }],
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}}
+        },
+        {
+          "id": 2,
+          "type": "gauge",
+          "title": "Budget d Erreur Restant (%)",
+          "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent", "min": 0, "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"color": "red", "value": null},
+                  {"color": "orange", "value": 20},
+                  {"color": "green", "value": 50}
+                ]
+              }
+            }
+          },
+          "targets": [{
+            "expr": "100 * (1 - (sum(increase(http_server_requests_seconds_count{uri=\"/api/transactions/transfer\",status=~\"5..\"}[30d])) or vector(0)) / (sum(increase(http_server_requests_seconds_count{uri=\"/api/transactions/transfer\"}[30d])) * 0.005 or vector(1)))",
+            "legendFormat": "Budget restant",
+            "refId": "A"
+          }],
+          "options": {"reduceOptions": {"calcs": ["lastNotNull"]}}
+        },
+        {
+          "id": 3,
+          "type": "timeseries",
+          "title": "Latence Transactionnelle P95 & P99 (SLO < 200ms)",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "fieldConfig": {"defaults": {"unit": "s"}},
+          "targets": [
+            {"expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri=\"/api/transactions/transfer\"}[5m])) by (le))", "legendFormat": "p95", "refId": "A"},
+            {"expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{uri=\"/api/transactions/transfer\"}[5m])) by (le))", "legendFormat": "p99", "refId": "B"},
+            {"expr": "vector(0.2)", "legendFormat": "SLO 200ms", "refId": "C"}
+          ]
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "Trafic / Debit RPS par Microservice",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "fieldConfig": {"defaults": {"unit": "reqps"}},
+          "targets": [
+            {"expr": "sum(rate(http_server_requests_seconds_count{job=~\".*auth.*\"}[5m]))", "legendFormat": "auth-service", "refId": "A"},
+            {"expr": "sum(rate(http_server_requests_seconds_count{job=~\".*transaction.*\"}[5m]))", "legendFormat": "transaction-service", "refId": "B"},
+            {"expr": "sum(rate(http_server_requests_seconds_count{job=~\".*notification.*\"}[5m]))", "legendFormat": "notification-service", "refId": "C"}
+          ]
+        },
+        {
+          "id": 5,
+          "type": "timeseries",
+          "title": "Taux d Erreurs HTTP 4xx & 5xx",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "fieldConfig": {"defaults": {"unit": "percentunit"}},
+          "targets": [
+            {"expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))", "legendFormat": "5xx", "refId": "A"},
+            {"expr": "sum(rate(http_server_requests_seconds_count{status=~\"4..\"}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))", "legendFormat": "4xx", "refId": "B"}
+          ]
+        }
+      ]
+    }
+  dashboard-jvm-actuator.json: |
+    {
+      "title": "OmniPay — JVM & Spring Boot Actuator",
+      "uid": "omnipay-jvm-actuator",
+      "tags": ["omnipay", "jvm", "spring-boot", "p5"],
+      "schemaVersion": 38,
+      "version": 1,
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "panels": [
+        {
+          "id": 1, "type": "timeseries",
+          "title": "JVM Heap Memory — Utilisee vs Max",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "fieldConfig": {"defaults": {"unit": "bytes"}},
+          "targets": [
+            {"expr": "sum(jvm_memory_used_bytes{area=\"heap\"}) by (application)", "legendFormat": "Heap utilisee {{application}}", "refId": "A"},
+            {"expr": "sum(jvm_memory_max_bytes{area=\"heap\"}) by (application)", "legendFormat": "Heap max {{application}}", "refId": "B"}
+          ]
+        },
+        {
+          "id": 2, "type": "timeseries",
+          "title": "Pauses GC (Garbage Collection)",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "fieldConfig": {"defaults": {"unit": "s"}},
+          "targets": [
+            {"expr": "sum(rate(jvm_gc_pause_seconds_sum[5m])) by (application, cause)", "legendFormat": "GC {{cause}} {{application}}", "refId": "A"}
+          ]
+        },
+        {
+          "id": 3, "type": "timeseries",
+          "title": "Threads Tomcat Actifs",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "fieldConfig": {"defaults": {"unit": "short"}},
+          "targets": [
+            {"expr": "sum(jvm_threads_live_threads) by (application)", "legendFormat": "Threads actifs {{application}}", "refId": "A"}
+          ]
+        },
+        {
+          "id": 4, "type": "timeseries",
+          "title": "Pool HikariCP — Connexions PostgreSQL",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "fieldConfig": {"defaults": {"unit": "short"}},
+          "targets": [
+            {"expr": "sum(hikaricp_connections_active) by (application)", "legendFormat": "Connexions actives {{application}}", "refId": "A"},
+            {"expr": "sum(hikaricp_connections_max) by (application)", "legendFormat": "Pool max {{application}}", "refId": "B"}
+          ]
+        }
+      ]
+    }
