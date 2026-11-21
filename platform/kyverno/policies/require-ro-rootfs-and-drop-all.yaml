@@ -1,0 +1,63 @@
+# ==============================================================================
+# OmniPay Zero-Trust — Kyverno ClusterPolicy : ReadOnlyRootFilesystem & Drop ALL
+# Impose l'immutabilité du système de fichiers et la suppression de tous les privilèges
+# Rôle P4 : Widad El Gharzaz (Packaging, Harbor, Argo Rollouts & Kyverno)
+# ==============================================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-ro-rootfs-and-drop-all
+  annotations:
+    policies.kyverno.io/title: "Imposition du ReadOnlyRootFilesystem et Drop de toutes les capacités"
+    policies.kyverno.io/category: "Pod Security Standards (Restricted)"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/subject: "Pod"
+    policies.kyverno.io/description: >-
+      Exige que tous les conteneurs déployés dans les namespaces omnipay-*
+      utilisent un système de fichiers racine en lecture seule (readOnlyRootFilesystem: true)
+      et abandonnent impérativement toutes les capacités Linux (capabilities.drop: [ALL]).
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: check-read-only-rootfs
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "omnipay-*"
+      validate:
+        message: "Tous les conteneurs dans omnipay-* doivent avoir un système de fichiers racine en lecture seule (securityContext.readOnlyRootFilesystem: true)."
+        pattern:
+          spec:
+            =(initContainers):
+              - securityContext:
+                  readOnlyRootFilesystem: true
+            containers:
+              - securityContext:
+                  readOnlyRootFilesystem: true
+
+    - name: check-capabilities-drop-all
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "omnipay-*"
+      validate:
+        message: "Tous les conteneurs dans omnipay-* doivent abandonner l'ensemble des capacités Linux (securityContext.capabilities.drop: [ALL])."
+        pattern:
+          spec:
+            =(initContainers):
+              - securityContext:
+                  capabilities:
+                    drop:
+                      - ALL
+            containers:
+              - securityContext:
+                  capabilities:
+                    drop:
+                      - ALL

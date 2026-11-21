@@ -1,0 +1,102 @@
+# ==============================================================================
+# OmniPay Zero-Trust — Kyverno ClusterPolicy : Interdiction HostPath & Privileged
+# Bloque impitoyablement toute élévation de privilèges ou accès au système hôte
+# Rôle P4 : Widad El Gharzaz (Packaging, Harbor, Argo Rollouts & Kyverno)
+# ==============================================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-host-path-and-privileged
+  annotations:
+    policies.kyverno.io/title: "Interdiction des volumes HostPath, Privileged et Capacités Dangereuses"
+    policies.kyverno.io/category: "Pod Security Standards (Restricted)"
+    policies.kyverno.io/severity: "critical"
+    policies.kyverno.io/subject: "Pod"
+    policies.kyverno.io/description: >-
+      Interdit formellement l'utilisation de volumes hostPath pour prévenir toute
+      évasion de conteneur, proscrit l'exécution en mode privileged, et rejette l'ajout
+      des capacités Linux à haut risque (SYS_ADMIN, NET_ADMIN, SYS_PTRACE) dans les
+      environnements omnipay-*.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: disallow-host-path-volumes
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "omnipay-*"
+      validate:
+        message: "L'utilisation de volumes hostPath est strictement interdite dans omnipay-* (risque d'évasion de conteneur vers l'hôte)."
+        pattern:
+          spec:
+            =(volumes):
+              - =(hostPath): "!*"
+
+    - name: disallow-privileged-containers
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "omnipay-*"
+      validate:
+        message: "L'exécution de conteneurs en mode privileged est strictement interdite dans omnipay-*."
+        pattern:
+          spec:
+            =(ephemeralContainers):
+              - =(securityContext):
+                  =(privileged): "!true"
+            =(initContainers):
+              - =(securityContext):
+                  =(privileged): "!true"
+            containers:
+              - =(securityContext):
+                  =(privileged): "!true"
+
+    - name: disallow-dangerous-capabilities
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - "omnipay-*"
+      validate:
+        message: "L'ajout des capacités Linux à haut risque (SYS_ADMIN, NET_ADMIN, SYS_PTRACE) est strictement interdit dans omnipay-*."
+        pattern:
+          spec:
+            =(ephemeralContainers):
+              - =(securityContext):
+                  =(capabilities):
+                    =(add):
+                      - "!SYS_ADMIN"
+                      - "!CAP_SYS_ADMIN"
+                      - "!NET_ADMIN"
+                      - "!CAP_NET_ADMIN"
+                      - "!SYS_PTRACE"
+                      - "!CAP_SYS_PTRACE"
+            =(initContainers):
+              - =(securityContext):
+                  =(capabilities):
+                    =(add):
+                      - "!SYS_ADMIN"
+                      - "!CAP_SYS_ADMIN"
+                      - "!NET_ADMIN"
+                      - "!CAP_NET_ADMIN"
+                      - "!SYS_PTRACE"
+                      - "!CAP_SYS_PTRACE"
+            containers:
+              - =(securityContext):
+                  =(capabilities):
+                    =(add):
+                      - "!SYS_ADMIN"
+                      - "!CAP_SYS_ADMIN"
+                      - "!NET_ADMIN"
+                      - "!CAP_NET_ADMIN"
+                      - "!SYS_PTRACE"
+                      - "!CAP_SYS_PTRACE"

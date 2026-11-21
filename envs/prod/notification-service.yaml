@@ -10,6 +10,7 @@ metadata:
     app: notification-service
     app.kubernetes.io/name: notification-service
     app.kubernetes.io/part-of: omnipay-zero-trust
+    monitored: "true"
 spec:
   replicas: 2
   selector:
@@ -20,6 +21,7 @@ spec:
       labels:
         app: notification-service
         app.kubernetes.io/name: notification-service
+        monitored: "true"
     spec:
       imagePullSecrets:
         - name: harbor-registry-secret
@@ -27,12 +29,16 @@ spec:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: notification-service
           image: harbor.omnipay.local:30002/omnipay/notification-service:1.0.0
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
@@ -49,6 +55,12 @@ spec:
             limits:
               cpu: 250m
               memory: 256Mi
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -57,6 +69,7 @@ metadata:
   namespace: omnipay-prod
   labels:
     app: notification-service
+    monitored: "true"
 spec:
   type: ClusterIP
   ports:

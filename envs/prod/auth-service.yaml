@@ -10,6 +10,7 @@ metadata:
     app: auth-service
     app.kubernetes.io/name: auth-service
     app.kubernetes.io/part-of: omnipay-zero-trust
+    monitored: "true"
 spec:
   replicas: 3
   selector:
@@ -20,6 +21,7 @@ spec:
       labels:
         app: auth-service
         app.kubernetes.io/name: auth-service
+        monitored: "true"
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/path: "/actuator/prometheus"
@@ -31,13 +33,16 @@ spec:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: auth-service
           image: harbor.omnipay.local:30002/omnipay/auth-service:1.0.0
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
@@ -56,6 +61,9 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
@@ -68,6 +76,9 @@ spec:
               port: 8081
             initialDelaySeconds: 30
             periodSeconds: 10
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -76,6 +87,7 @@ metadata:
   namespace: omnipay-prod
   labels:
     app: auth-service
+    monitored: "true"
 spec:
   type: ClusterIP
   ports:

@@ -1,7 +1,7 @@
 # ==============================================================================
 # OmniPay Zero-Trust — Argo Rollouts Manifest : Transaction Service (Prod)
-# Stratégie Canary progressive : 10% -> 50% -> 100% avec analyse Prometheus
-# Rôle P4 : Livraison & Chaîne d'Approvisionnement
+# Stratégie Canary progressive : 10% -> 33% -> 66% -> 100% avec analyse Prometheus
+# Rôle P4 : Widad El Gharzaz (Packaging, Harbor, Argo Rollouts & Kyverno)
 # ==============================================================================
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
@@ -12,6 +12,7 @@ metadata:
     app: transaction-service
     app.kubernetes.io/name: transaction-service
     app.kubernetes.io/part-of: omnipay-zero-trust
+    monitored: "true"
 spec:
   replicas: 4
   revisionHistoryLimit: 5
@@ -21,34 +22,46 @@ spec:
   strategy:
     canary:
       stableService: transaction-service-active
-      canaryService: transaction-service-preview
+      canaryService: transaction-service-canary
       trafficRouting:
         nginx:
           stableIngress: transaction-service-ingress
       steps:
         # Palier 1 : Injection de 10% du trafic sur la nouvelle version (Canary)
+        # Blast Radius strictement limité à 10% des flux bancaires
         - setWeight: 10
         - pause:
-            duration: 30s
+            duration: 1m
         - analysis:
             templates:
-              - templateName: prometheus-error-rate-5xx
+              - templateName: prometheus-error-rate
             args:
               - name: service-name
                 value: transaction-service
 
-        # Palier 2 : Montée en charge à 50% du trafic
-        - setWeight: 50
+        # Palier 2 : Montée en charge à 33% du trafic
+        - setWeight: 33
         - pause:
-            duration: 30s
+            duration: 1m
         - analysis:
             templates:
-              - templateName: prometheus-error-rate-5xx
+              - templateName: prometheus-error-rate
             args:
               - name: service-name
                 value: transaction-service
 
-        # Palier 3 : Promotion complète à 100% (Version stable finale)
+        # Palier 3 : Montée en charge à 66% du trafic
+        - setWeight: 66
+        - pause:
+            duration: 1m
+        - analysis:
+            templates:
+              - templateName: prometheus-error-rate
+            args:
+              - name: service-name
+                value: transaction-service
+
+        # Palier 4 : Promotion complète à 100% (Version stable finale)
         - setWeight: 100
   template:
     metadata:
@@ -56,6 +69,7 @@ spec:
         app: transaction-service
         app.kubernetes.io/name: transaction-service
         app.kubernetes.io/part-of: omnipay-zero-trust
+        monitored: "true"
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/path: "/actuator/prometheus"
@@ -68,13 +82,15 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: transaction-service
           image: harbor.omnipay.local:30002/omnipay/transaction-service:1.0.0
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
@@ -97,6 +113,9 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
@@ -111,3 +130,6 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 10
             failureThreshold: 3
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}

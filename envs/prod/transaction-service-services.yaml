@@ -1,6 +1,7 @@
 # ==============================================================================
 # OmniPay Zero-Trust — Services Kubernetes pour Argo Rollouts Canary (Prod)
-# Rôle P4 : Livraison & Chaîne d'Approvisionnement
+# Services Stable (active) et Canary (canary) pour transaction-service
+# Rôle P4 : Widad El Gharzaz (Packaging, Harbor, Argo Rollouts & Kyverno)
 # ==============================================================================
 apiVersion: v1
 kind: Service
@@ -10,7 +11,9 @@ metadata:
   labels:
     app: transaction-service
     role: stable
+    app.kubernetes.io/name: transaction-service
     app.kubernetes.io/part-of: omnipay-zero-trust
+    monitored: "true"
 spec:
   type: ClusterIP
   ports:
@@ -26,12 +29,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: transaction-service-preview
+  name: transaction-service-canary
   namespace: omnipay-prod
   labels:
     app: transaction-service
     role: canary
+    app.kubernetes.io/name: transaction-service
     app.kubernetes.io/part-of: omnipay-zero-trust
+    monitored: "true"
 spec:
   type: ClusterIP
   ports:
@@ -51,12 +56,17 @@ metadata:
   namespace: omnipay-prod
   labels:
     app: transaction-service
+    app.kubernetes.io/name: transaction-service
     app.kubernetes.io/part-of: omnipay-zero-trust
+    monitored: "true"
 spec:
   type: ClusterIP
   ports:
     - name: http
       port: 8080
       targetPort: 8080
+    - name: metrics
+      port: 8081
+      targetPort: 8081
   selector:
     app: transaction-service

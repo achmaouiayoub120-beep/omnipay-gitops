@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # OmniPay Zero-Trust — Installation Helm reproductible pour Kyverno Admission Controller
-# Rôle P4 : Livraison & Chaîne d'Approvisionnement
+# Rôle P4 : Widad El Gharzaz (Packaging, Harbor, Argo Rollouts & Kyverno)
 # ==============================================================================
 
 set -euo pipefail
@@ -39,12 +39,18 @@ helm upgrade --install "${HELM_RELEASE}" kyverno/kyverno \
   --wait \
   --timeout 8m
 
-# 5. Déploiement des ClusterPolicies
+# 5. Déploiement des ClusterPolicies Zero-Trust (Admission & Runtime Hardening)
 echo "--> [4/4] Application des ClusterPolicies Zero-Trust..."
 kubectl apply -f "${POLICIES_DIR}/disallow-unsigned-images.yaml"
 kubectl apply -f "${POLICIES_DIR}/require-non-root.yaml"
+kubectl apply -f "${POLICIES_DIR}/mutate-inject-zero-trust-labels.yaml"
+kubectl apply -f "${POLICIES_DIR}/disallow-host-path-and-privileged.yaml"
+kubectl apply -f "${POLICIES_DIR}/require-ro-rootfs-and-drop-all.yaml"
 
 echo "==================================================================="
 echo " Kyverno Admission Controller est opérationnel et actif."
-echo " Les pods non signés seront rejetés dans omnipay-prod et omnipay-recette."
+echo " - Signature Cosign : Bloquante (Enforce)"
+echo " - Runtime Hardening : HostPath, Privileged et Caps interdits (Enforce)"
+echo " - Immutabilité      : ReadOnlyRootFilesystem & Drop ALL imposés"
+echo " - Mutation          : Injection automatique labels Zero-Trust & Seccomp"
 echo "==================================================================="
