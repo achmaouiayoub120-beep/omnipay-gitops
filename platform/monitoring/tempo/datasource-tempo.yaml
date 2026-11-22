@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-tempo
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+    app.kubernetes.io/part-of: omnipay-zero-trust
+    app.kubernetes.io/managed-by: helm
+  annotations:
+    description: "Datasource Tempo pour Grafana — Corrélation bidirectionnelle Traces ↔ Logs ↔ Métriques (S3 P5)"
+data:
+  datasource-tempo.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        type: tempo
+        access: proxy
+        url: http://tempo.monitoring.svc.cluster.local:3100
+        uid: tempo
+        isDefault: false
+        version: 1
+        editable: false
+        jsonData:
+          httpMethod: GET
+          # Corrélation Traces ➔ Logs (Loki)
+          tracesToLogsV2:
+            datasourceUid: "loki"
+            spanStartTimeShift: "-2m"
+            spanEndTimeShift: "2m"
+            tags:
+              - key: "service.name"
+                value: "app"
+            filterByTraceId: true
+            filterBySpanId: false
+            customQuery: true
+            query: '{namespace="default", app="${__span.tags["service.name"]}"} |= "${__trace.id}"'
+          # Corrélation Traces ➔ Métriques (Prometheus RED metrics)
+          tracesToMetrics:
+            datasourceUid: "prometheus"
+            spanStartTimeShift: "-5m"
+            spanEndTimeShift: "5m"
+            tags:
+              - key: "service.name"
+                value: "job"
+            queries:
+              - name: "Taux de requêtes (RPS)"
+                query: 'sum(rate(http_server_requests_seconds_count{job=~".*${__span.tags["service.name"]}.*"}[1m]))'
+              - name: "Latence P95"
+                query: 'histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=~".*${__span.tags["service.name"]}.*"}[1m])) by (le))'
+          # Cartographie visuelle des microservices (Service Map & Node Graph)
+          serviceMap:
+            datasourceUid: "prometheus"
+          nodeGraph:
+            enabled: true
+          # Recherche de traces intégrée
+          search:
+            hide: false
+          lokiSearch:
+            datasourceUid: "loki"
+        secureJsonData: {}

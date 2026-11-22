@@ -70,18 +70,39 @@ grafana:
   defaultDashboardsTimezone: Europe/Paris
   plugins:
     - grafana-piechart-panel
-  # Datasource Loki provisionnée automatiquement (S2)
+  # Datasources Loki et Tempo provisionnées automatiquement (S2 & S3)
   additionalDataSources:
     - name: Loki
       type: loki
       url: http://loki:3100
+      uid: loki
       access: proxy
       isDefault: false
       jsonData:
         maxLines: 1000
+    - name: Tempo
+      type: tempo
+      url: http://tempo.monitoring.svc.cluster.local:3100
+      uid: tempo
+      access: proxy
+      isDefault: false
+      jsonData:
+        httpMethod: GET
+        tracesToLogsV2:
+          datasourceUid: "loki"
+          spanStartTimeShift: "-2m"
+          spanEndTimeShift: "2m"
+          tags:
+            - key: "service.name"
+              value: "app"
+          filterByTraceId: true
+        serviceMap:
+          datasourceUid: "prometheus"
+        nodeGraph:
+          enabled: true
 
 # -----------------------------------------------------------------------------
-# Alertmanager — Routage webhook (Discord / Slack / Telegram) — S2
+# Alertmanager — Routage webhook enrichi (Discord / Slack / Telegram) — S3
 # -----------------------------------------------------------------------------
 alertmanager:
   enabled: true
@@ -101,7 +122,7 @@ alertmanager:
     global:
       resolve_timeout: 5m
     # -------------------------------------------------------------------------
-    # Arbre de routage Google SRE Multi-Burn-Rate
+    # Arbre de routage Google SRE Multi-Burn-Rate (S3)
     # -------------------------------------------------------------------------
     route:
       group_by: ['alertname', 'namespace', 'service', 'severity']
@@ -110,7 +131,7 @@ alertmanager:
       repeat_interval: 1h
       receiver: 'default-webhook'
       routes:
-        # CRITIQUE : envoi immédiat (group_wait: 10s)
+        # CRITIQUE : envoi immédiat (group_wait: 10s, repeat: 30m)
         - matchers:
             - name: severity
               value: critical
@@ -127,23 +148,34 @@ alertmanager:
           repeat_interval: 2h
           continue: false
     # -------------------------------------------------------------------------
-    # Récepteurs — Remplacer WEBHOOK_URL avant déploiement
-    # Discord  : https://discord.com/api/webhooks/<ID>/<TOKEN>
-    # Slack    : https://hooks.slack.com/services/T.../B.../...
+    # Récepteurs avec cartes d'incident professionnelles SRE
+    # Placeholder Zero-Trust : WEBHOOK_URL_PLACEHOLDER
+    # Exemples d'URL :
+    #   Discord  : https://discord.com/api/webhooks/<ID>/<TOKEN>
+    #   Slack    : https://hooks.slack.com/services/<T>/<B>/<X>
+    #   Telegram : http://alertmanager-bot:8080/webhook
     # -------------------------------------------------------------------------
     receivers:
       - name: 'default-webhook'
         webhook_configs:
-          - url: 'http://WEBHOOK_URL_EQUIPE/alertmanager'
+          - url: 'http://WEBHOOK_URL_PLACEHOLDER/alertmanager'
             send_resolved: true
       - name: 'critical-webhook'
         webhook_configs:
-          - url: 'http://WEBHOOK_URL_EQUIPE/alertmanager'
+          - url: 'http://WEBHOOK_URL_PLACEHOLDER/alertmanager'
             send_resolved: true
             max_alerts: 0
+            # Format attendu du message (traité par bridge Discord/Slack ou webhook) :
+            # Titre : 🚨 [ALERTE SRE OMNIPAY] {{ .GroupLabels.alertname }} ({{ .CommonLabels.severity | toUpper }})
+            # Corps :
+            #   - Service impacté : {{ .CommonLabels.service }}
+            #   - Namespace : {{ .CommonLabels.namespace }}
+            #   - Symptôme : {{ .CommonAnnotations.description }}
+            #   - Vitesse de consommation du budget d'erreur : Burn Rate critique détecté
+            #   - Lien direct : http://<NODE_IP>:30300/d/omnipay-slo-golden (Dashboard Grafana)
       - name: 'warning-webhook'
         webhook_configs:
-          - url: 'http://WEBHOOK_URL_EQUIPE/alertmanager'
+          - url: 'http://WEBHOOK_URL_PLACEHOLDER/alertmanager'
             send_resolved: true
     # Inhibition : ne pas notifier warning si critical actif sur même service
     inhibit_rules:

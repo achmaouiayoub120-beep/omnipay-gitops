@@ -1,0 +1,68 @@
+# =============================================================================
+# values-tempo.yaml — Grafana Tempo pour OmniPay Zero-Trust (K3s)
+# Mode : Standalone (monolithique compact, consommation mémoire < 256Mi)
+# Auteur : P5 — Moad Helkamel | Date : Semaine 3 (S3)
+# =============================================================================
+
+tempo:
+  # Mode de déploiement autonome adapté à K3s
+  repository: grafana/tempo
+  tag: 2.6.1
+
+  # Allocation de ressources légère
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+
+  # Rétention des traces : 24 heures pour environnement K3s
+  retention: 24h
+
+  # Récepteurs de traces distribuées (OTLP et Jaeger)
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+    jaeger:
+      protocols:
+        thrift_http:
+          endpoint: "0.0.0.0:14268"
+
+  # Configuration du moteur de stockage Tempo
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+      wal:
+        path: /var/tempo/wal
+
+  # Persistance locale via le storageClass par défaut de K3s (local-path)
+  persistence:
+    enabled: true
+    storageClassName: "local-path"
+    size: 5Gi
+    accessModes:
+      - ReadWriteOnce
+
+  # Exposition des services réseau
+  service:
+    type: ClusterIP
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "3100"
+
+  # Métriques d'auto-surveillance de Tempo pour Prometheus
+  metricsGenerator:
+    enabled: true
+    remoteWriteUrl: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/write"
+
+# Ingress désactivé (accès interne cluster via Grafana et OTLP)
+ingress:
+  enabled: false
