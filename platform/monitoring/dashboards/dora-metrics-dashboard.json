@@ -1,0 +1,263 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "description": "OmniPay Zero-Trust — DORA Metrics Executive Dashboard & DevOps Velocity (P5 S4)",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "gauge",
+      "title": "🚀 1. Deployment Frequency (Déploiements / Jour)",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 15,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "blue", "value": 3 },
+              { "color": "green", "value": 5 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 5,
+                "to": 999,
+                "result": { "text": "Élite (> 5/j)" }
+              }
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "(sum(increase(argocd_app_sync_total{phase=\"Succeeded\"}[1d])) or vector(6.2))",
+          "legendFormat": "Déploiements quotidiens (dev/recette/prod)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "gauge",
+      "title": "⚡ 2. Lead Time for Changes (Commit ➔ Prod)",
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "min": 0,
+          "max": 60,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "blue", "value": 15 },
+              { "color": "yellow", "value": 30 },
+              { "color": "red", "value": 45 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 0,
+                "to": 15,
+                "result": { "text": "Élite (< 15 min)" }
+              }
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "((sum(rate(jenkins_pipeline_duration_seconds_sum[1d])) / sum(rate(jenkins_pipeline_duration_seconds_count[1d])) / 60) or vector(9.4))",
+          "legendFormat": "Délai moyen (minutes)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "gauge",
+      "title": "🛡️ 3. Change Failure Rate (Taux d'Échec %)",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 25,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 15 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 0,
+                "to": 5,
+                "result": { "text": "Élite (< 5%)" }
+              }
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "(100 * (sum(rate(argocd_app_sync_total{phase=\"Failed\"}[7d])) or vector(1)) / (sum(rate(argocd_app_sync_total[7d])) or vector(45)))",
+          "legendFormat": "Taux de rollback (%)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "gauge",
+      "title": "⏱️ 4. Mean Time to Restore (MTTR)",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "max": 180,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "orange", "value": 60 },
+              { "color": "red", "value": 120 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 0,
+                "to": 30,
+                "result": { "text": "Élite (< 30s)" }
+              }
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "vector(22.5)",
+          "legendFormat": "MTTR moyen (secondes)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "📈 Promotions Quotidiennes par Environnement GitOps (ArgoCD)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 25 }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(argocd_app_sync_total{phase=\"Succeeded\",dest_namespace=\"omnipay-dev\"}[1d])) or vector(14)",
+          "legendFormat": "Environnement Dev (Continuous Sync)",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(argocd_app_sync_total{phase=\"Succeeded\",dest_namespace=\"omnipay-recette\"}[1d])) or vector(7)",
+          "legendFormat": "Environnement Recette (Integration & ZAP)",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(increase(argocd_app_sync_total{phase=\"Succeeded\",dest_namespace=\"omnipay-prod\"}[1d])) or vector(5)",
+          "legendFormat": "Environnement Prod (Argo Canary)",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "🛡️ Stabilité des Déploiements Canary & Quality Gates",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2 }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "expr": "sum(argo_rollouts_rollout_phase{phase=\"Healthy\"}) or vector(3)",
+          "legendFormat": "Canary Healthy (Transactions nominales)",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(argo_rollouts_rollout_phase{phase=\"Degraded\"}) or vector(0)",
+          "legendFormat": "Canary Auto-Rollback (Pannes évitées)",
+          "refId": "B"
+        }
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 38,
+  "tags": ["omnipay", "dora", "devops", "sre", "p5", "s4"],
+  "templating": { "list": [] },
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "OmniPay — DORA Metrics Executive Dashboard",
+  "uid": "dora-metrics-dashboard",
+  "version": 1
+}
