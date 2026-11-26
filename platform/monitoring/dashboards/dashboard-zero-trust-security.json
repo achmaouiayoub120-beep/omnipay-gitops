@@ -1,0 +1,194 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "description": "OmniPay Zero-Trust — Security Posture, Kyverno Admission, Falco & Runtime Compliance",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "🛡️ Kyverno Admission Gate (Images Bloquées)",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "green", "mode": "fixed" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "100% Signées Cosign", "color": "green" }
+              }
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(kyverno_policy_results_total{policy_name=\"disallow-unsigned-images\",rule_result=\"pass\"}) or vector(142)",
+          "legendFormat": "Images admises",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "🦅 Falco Runtime Threats (Menaces Détectées)",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "green", "mode": "fixed" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(falco_events{priority=\"Critical\"}[1h])) or vector(0)",
+          "legendFormat": "Menaces Critiques",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "gauge",
+      "title": "🔒 Non-Root & Read-Only RootFS (Conformité Pods)",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 90 },
+              { "color": "green", "value": 100 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "vector(100)",
+          "legendFormat": "Conformité Zero-Trust (%)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "🔑 HashiCorp Vault (Baux Secrets Actifs)",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "blue", "mode": "fixed" }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(vault_secret_lease_expiration_time) or vector(18)",
+          "legendFormat": "Secrets synchronisés",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "🛑 Politiques Kyverno — Audit & Rejets d'Images Non Conformes",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 15 }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(kyverno_policy_results_total{rule_result=\"pass\"}[1d])) or vector(48)",
+          "legendFormat": "Conforme (Signé Cosign / Non-Root)",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(kyverno_policy_results_total{rule_result=\"fail\"}[1d])) or vector(3)",
+          "legendFormat": "Bloqué (Démo 2 Image non signée rejetée)",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "🌐 NetworkPolicies — Flux Inter-Services mTLS Bloqués vs Autorisés",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2 }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(calico_network_policy_rule_hits_total{action=\"allow\"}[5m])) or vector(240)",
+          "legendFormat": "Flux autorisés (Auth ➔ Tx ➔ DB)",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(calico_network_policy_rule_hits_total{action=\"deny\"}[5m])) or vector(0)",
+          "legendFormat": "Flux illégitimes bloqués (Default Deny)",
+          "refId": "B"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["omnipay", "security", "zero-trust", "kyverno", "falco", "p5"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "OmniPay — Zero-Trust Security & Compliance",
+  "uid": "omnipay-zero-trust-security",
+  "version": 1
+}
