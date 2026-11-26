@@ -42,6 +42,28 @@ spec:
             runbook_url: "https://github.com/achmaouiayoub120-beep/omnipay-app/blob/main/docs/runbooks/slo-breach.md"
             dashboard_url: "http://GRAFANA_IP:30300/d/omnipay-slo-golden"
 
+        # --- Alerte CRITIQUE Ciblée : Épuisement Budget Transaction Service (Démo 5 S4) ---
+        - alert: TransactionServiceErrorBudgetBurning
+          expr: |
+            (
+              sum(rate(http_server_requests_seconds_count{uri=~"/api/transactions/.*",status=~"5.."}[30m]))
+              /
+              sum(rate(http_server_requests_seconds_count{uri=~"/api/transactions/.*"}[30m]))
+            ) > (14.4 * (1 - 0.995))
+          for: 1m
+          labels:
+            severity: critical
+            team: p5-sre
+            service: transaction-service
+            slo: "99.5"
+          annotations:
+            summary: "🔴 CRITIQUE — Épuisement accéléré du budget d'erreur Transaction Service"
+            description: |
+              Le service de virements bancaires transaction-service subit un épuisement critique de son budget d'erreur.
+              Burn Rate actuel : {{ $value | humanizePercentage }}. Risque de rupture de conformité DORA.
+            runbook_url: "https://github.com/achmaouiayoub120-beep/omnipay-app/blob/main/docs/runbooks/slo-breach.md"
+            dashboard_url: "http://GRAFANA_IP:30300/d/omnipay-slo-golden"
+
         # --- Alerte WARNING : Burn Rate 6x sur 6h (perte 5% budget en 6h) ---
         - alert: OmniPayBurnRateWarning
           expr: |
