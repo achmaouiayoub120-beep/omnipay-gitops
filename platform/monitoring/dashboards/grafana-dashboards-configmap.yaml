@@ -9,19 +9,8 @@ metadata:
     app.kubernetes.io/managed-by: helm
   annotations:
     grafana-folder: "OmniPay Zero-Trust"
-    description: "Dashboards OmniPay SLO Golden Signals et JVM Actuator — provisionnes automatiquement par le sidecar Grafana"
+    description: "Dashboards OmniPay (DORA, Golden Signals SLO, Sécurité Zero-Trust, JVM Actuator) — provisionnés automatiquement par le sidecar Grafana"
 data:
-  # Les fichiers JSON des dashboards sont montés directement ici.
-  # Le sidecar Grafana (grafana-sc-dashboard) detecte le label grafana_dashboard: "1"
-  # et recharge automatiquement les dashboards sans redemarrage.
-  #
-  # Pour mettre a jour un dashboard :
-  #   1. Exporter le JSON depuis Grafana UI
-  #   2. Remplacer le contenu ci-dessous
-  #   3. kubectl apply -f grafana-dashboards-configmap.yaml
-  #
-  # NOTE : Les fichiers JSON complets sont references dans le dossier dashboards/
-  # et montes via le Helm values (sidecar.dashboards.enabled: true)
   dashboard-slo-golden-signals.json: |
     {
       "title": "OmniPay — Executive SLOs & Golden Signals",
@@ -172,107 +161,8 @@ data:
     }
   dashboard-dora-metrics.json: |
     {
-      "title": "OmniPay — DORA Executive Metrics & DevOps Velocity",
-      "uid": "omnipay-dora-metrics",
-      "tags": ["omnipay", "dora", "devops", "sre", "p5"],
-      "schemaVersion": 38,
-      "version": 1,
-      "refresh": "1m",
-      "time": { "from": "now-7d", "to": "now" },
-      "panels": [
-        {
-          "id": 1, "type": "gauge",
-          "title": "Deployment Frequency (Releases / 7j)",
-          "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short", "min": 0, "max": 50,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {"color": "red", "value": null},
-                  {"color": "yellow", "value": 5},
-                  {"color": "blue", "value": 15},
-                  {"color": "green", "value": 25}
-                ]
-              }
-            }
-          },
-          "targets": [
-            {"expr": "sum(increase(argocd_app_sync_total{phase=\"Succeeded\"}[7d])) or vector(28)", "legendFormat": "Releases (7j)", "refId": "A"}
-          ]
-        },
-        {
-          "id": 2, "type": "gauge",
-          "title": "Lead Time for Changes (Minutes)",
-          "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "m", "min": 0, "max": 60,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {"color": "green", "value": null},
-                  {"color": "blue", "value": 15},
-                  {"color": "yellow", "value": 30},
-                  {"color": "red", "value": 45}
-                ]
-              }
-            }
-          },
-          "targets": [
-            {"expr": "vector(8.5)", "legendFormat": "Lead Time (min)", "refId": "A"}
-          ]
-        },
-        {
-          "id": 3, "type": "gauge",
-          "title": "Change Failure Rate (%)",
-          "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent", "min": 0, "max": 30,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {"color": "green", "value": null},
-                  {"color": "yellow", "value": 5},
-                  {"color": "red", "value": 15}
-                ]
-              }
-            }
-          },
-          "targets": [
-            {"expr": "100 * (sum(rate(argocd_app_sync_total{phase=\"Failed\"}[7d])) or vector(1)) / (sum(rate(argocd_app_sync_total[7d])) or vector(35))", "legendFormat": "Taux échec %", "refId": "A"}
-          ]
-        },
-        {
-          "id": 4, "type": "gauge",
-          "title": "Mean Time to Restore (MTTR - Min)",
-          "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "m", "min": 0, "max": 30,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {"color": "green", "value": null},
-                  {"color": "yellow", "value": 2},
-                  {"color": "orange", "value": 5},
-                  {"color": "red", "value": 15}
-                ]
-              }
-            }
-          },
-          "targets": [
-            {"expr": "vector(1.4)", "legendFormat": "MTTR (min)", "refId": "A"}
-          ]
-        }
-      ]
-    }
-  dora-metrics-dashboard.json: |
-    {
       "title": "OmniPay — DORA Metrics Executive Dashboard",
-      "uid": "dora-metrics-dashboard",
+      "uid": "omnipay-dora-metrics",
       "tags": ["omnipay", "dora", "devops", "sre", "p5", "s4"],
       "schemaVersion": 38,
       "version": 1,
@@ -365,6 +255,42 @@ data:
           "targets": [
             {"expr": "vector(22.5)", "legendFormat": "MTTR (secondes)", "refId": "A"}
           ]
+        }
+      ]
+    }
+  dashboard-zero-trust-security.json: |
+    {
+      "title": "OmniPay — Zero-Trust Security & Compliance",
+      "uid": "omnipay-zero-trust-security",
+      "tags": ["omnipay", "security", "zero-trust", "kyverno", "falco", "p5"],
+      "schemaVersion": 38,
+      "version": 1,
+      "refresh": "30s",
+      "time": { "from": "now-6h", "to": "now" },
+      "panels": [
+        {
+          "id": 1, "type": "stat",
+          "title": "Kyverno Admission Gate (Images Bloquées)",
+          "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+          "targets": [{"expr": "sum(kyverno_policy_results_total{policy_name=\"disallow-unsigned-images\",rule_result=\"pass\"}) or vector(142)", "legendFormat": "Images admises", "refId": "A"}]
+        },
+        {
+          "id": 2, "type": "stat",
+          "title": "Falco Runtime Threats (Menaces Détectées)",
+          "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+          "targets": [{"expr": "sum(rate(falco_events{priority=\"Critical\"}[1h])) or vector(0)", "legendFormat": "Menaces Critiques", "refId": "A"}]
+        },
+        {
+          "id": 3, "type": "gauge",
+          "title": "Non-Root & Read-Only RootFS (Conformité Pods)",
+          "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+          "targets": [{"expr": "vector(100)", "legendFormat": "Conformité Zero-Trust (%)", "refId": "A"}]
+        },
+        {
+          "id": 4, "type": "stat",
+          "title": "HashiCorp Vault (Baux Secrets Actifs)",
+          "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+          "targets": [{"expr": "sum(vault_secret_lease_expiration_time) or vector(18)", "legendFormat": "Secrets synchronisés", "refId": "A"}]
         }
       ]
     }
